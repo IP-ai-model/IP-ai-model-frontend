@@ -39,3 +39,41 @@ export interface ChatMessage {
   timestamp: Date;
   verified: boolean;
 }
+
+// IP Model ERC1155 NFT types
+export interface IPModelGroup {
+  groupId: string;
+  name: string;
+  description: string;
+  maxSupply: string;
+  currentSupply: string;
+  isActive: boolean;
+  price: string;
+  payToken: string;
+}
+
+export interface IPModelNFT {
+  tokenId: string;
+  groupId: string;
+  balance: string;
+  uri: string;
+  metadata?: {
+    name?: string;
+    description?: string;
+    image?: string;
+    attributes?: Array<{
+      trait_type: string;
+      value: string;
+    }>;
+  };
+  groupInfo?: IPModelGroup;
+}
+
+export interface GroupedNFTs {
+  active: IPModelNFT[];
+  inactive: IPModelNFT[];
+  highSupply: IPModelNFT[];
+  lowSupply: IPModelNFT[];
+  free: IPModelNFT[];
+  paid: IPModelNFT[];
+}
