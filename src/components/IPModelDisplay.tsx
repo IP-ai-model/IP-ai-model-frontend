@@ -207,22 +207,30 @@ const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '', onPageC
               <div
                 key={`${nft.tokenId}-${nft.groupId}`} 
                 className="border rounded-lg p-4 hover:shadow-md transition-shadow transform hover:scale-105 cursor-pointer"
-                onClick={() => onPageChange?.('ai-companion')}
+                onClick={async () => {
+                  onPageChange?.('ai-companion');
+                  if (nft.groupInfo?.name) {
+                    try {
+                      await fetch('/api/save-group-name', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ groupName: nft.groupInfo.name })
+                      });
+                    } catch (error) {
+                      console.error('Failed to send group name to backend:', error);
+                    }
+                  }
+                }}
               >
                 {/* NFT图片/占位符 */}
                 <div className="aspect-square bg-gradient-to-br from-pink-100 to-purple-100 rounded-lg mb-4 flex items-center justify-center">
-                  {nft.metadata?.image ? (
                     <img
-                      src={nft.metadata.image}
-                      alt={nft.metadata.name || `NFT ${nft.tokenId}`}
+                      src="../../public/屏幕截图%202025-07-02%20171300.png"
                       className="w-full h-full object-cover rounded-lg"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
                     />
-                  ) : (
-                    <div className="text-6xl text-pink-300">🎨</div>
-                  )}
+
                 </div>
 
                 {/* NFT信息 */}
