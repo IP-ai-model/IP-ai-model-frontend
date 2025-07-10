@@ -12,9 +12,11 @@ interface IPModelContextType {
   refetch: () => void;
   getGroupInfo: (groupId: string) => Promise<IPModelGroup | null>;
   checkBalance: (groupId: string) => Promise<string>;
+  currentGroupName: string | null;
+  setCurrentGroupName: (name: string | null) => void;
 }
 
-const IPModelContext = createContext<IPModelContextType | undefined>(undefined);
+export const IPModelContext = createContext<IPModelContextType | undefined>(undefined);
 
 interface IPModelProviderProps {
   children: React.ReactNode;
@@ -52,6 +54,8 @@ export const IPModelProvider: React.FC<IPModelProviderProps> = ({
     setGroupedNFTs(getNFTsByGroupType());
   }, [nfts, getNFTsByGroupType]);
 
+  const [currentGroupName, setCurrentGroupName] = useState<string | null>(null);
+
   const value: IPModelContextType = {
     nfts,
     groups,
@@ -61,6 +65,8 @@ export const IPModelProvider: React.FC<IPModelProviderProps> = ({
     refetch,
     getGroupInfo,
     checkBalance,
+    currentGroupName,
+    setCurrentGroupName,
   };
 
   return (

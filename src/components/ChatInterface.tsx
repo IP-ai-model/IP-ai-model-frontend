@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Heart, Sparkles, User, Bot } from 'lucide-react';
+import { useIPModel } from '../contexts/IPModelContext';
+import { Send, Mic, Heart, User, Bot } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -10,22 +11,19 @@ interface Message {
 }
 
 const ChatInterface: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: "Hello! I'm Aurora, your AI companion. I'm here to listen, understand, and connect with you on a deeper level. How are you feeling today?",
-      sender: 'ai',
-      timestamp: new Date(),
-      emotion: 'warm'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const { currentGroupName } = useIPModel();
+
   const fetchAIResponse = async (userInput: string): Promise<string> => {
     try {
-      const response = await fetch(`/query?query=${encodeURIComponent(userInput)}`);
+      const url = currentGroupName
+        ? `/query?query=${encodeURIComponent(userInput)}&kb_name=${encodeURIComponent(currentGroupName)}`
+        : `/query?query=${encodeURIComponent(userInput)}`;
+      const response = await fetch(url);
       const data = await response.json();
 
       if (data.success) {
@@ -47,6 +45,22 @@ const ChatInterface: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const fetchInitialMessage = async () => {
+      const aiReply = await fetchAIResponse('你好');
+      const aiMessage: Message = {
+        id: Date.now().toString(),
+        content: aiReply,
+        sender: 'ai',
+        timestamp: new Date(),
+        emotion: 'warm'
+      };
+      setMessages([aiMessage]);
+    };
+    
+    fetchInitialMessage();
+  }, []);
 
   const handleSendMessage = async () => {
 
@@ -94,7 +108,7 @@ const ChatInterface: React.FC = () => {
             <Heart className="w-5 h-5 text-pink-600" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-800">Aurora</h3>
+            <h3 className="font-semibold text-gray-800">{currentGroupName}</h3>
             <p className="text-xs text-gray-600">Your AI Companion • Online</p>
           </div>
           <div className="ml-auto">
@@ -163,7 +177,7 @@ const ChatInterface: React.FC = () => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Share your thoughts with Aurora..."
+              placeholder={`Share your thoughts with ${currentGroupName}`}
               className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-sm text-gray-800 placeholder-gray-500 resize-none focus:outline-none focus:border-pink-500/50 transition-colors"
               rows={1}
             />

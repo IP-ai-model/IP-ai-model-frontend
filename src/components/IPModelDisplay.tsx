@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useIPModel } from '../contexts/IPModelContext';
+import React, { useState, useEffect, useContext } from 'react';
+import { useIPModel, IPModelContext } from '../contexts/IPModelContext';
 import { IPModelGroup } from '../types/dreamlicense';
 import { formatPrice as formatTokenPrice } from '../utils/tokenUtils';
 import { useWallet } from '../hooks/useWallet';
@@ -11,6 +11,9 @@ interface IPModelDisplayProps {
 
 const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '', onPageChange }) => {
   const { nfts, groups, groupedNFTs, loading, error, refetch } = useIPModel();
+  const context = useContext(IPModelContext);
+  if (!context) throw new Error('IPModelContext not found');
+  const { setCurrentGroupName } = context;
   const { wallet } = useWallet();
   const [selectedTab, setSelectedTab] = useState<'all' | 'active' | 'inactive' | 'free' | 'paid'>('all');
   const [selectedGroup, setSelectedGroup] = useState<IPModelGroup | null>(null);
@@ -211,13 +214,7 @@ const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '', onPageC
                   onPageChange?.('ai-companion');
                   if (nft.groupInfo?.name) {
                     try {
-                      await fetch('/api/save-group-name', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ groupName: nft.groupInfo.name })
-                      });
+                      setCurrentGroupName(nft.groupInfo.name);
                     } catch (error) {
                       console.error('Failed to send group name to backend:', error);
                     }
@@ -243,9 +240,6 @@ const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '', onPageC
                 <h4 className="font-medium text-gray-900">
                     {nft.metadata?.name || `NFT #${nft.tokenId}`}
                   </h4>
-                  <p className="text-sm text-gray-600">
-                    {nft.metadata?.description || '暂无描述'}
-                  </p>
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>群组: {nft.groupId}</span>
                     <span>余额: {formatBalance(nft.balance)}</span>

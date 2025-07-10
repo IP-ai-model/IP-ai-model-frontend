@@ -191,10 +191,6 @@ const GroupInfoDisplay: React.FC<GroupInfoDisplayProps> = ({
                 <p className="text-gray-900 mt-1">{selectedGroup.name || '未设置'}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">描述</label>
-                <p className="text-gray-900 mt-1">{selectedGroup.description || '暂无描述'}</p>
-              </div>
-              <div>
                 <label className="text-sm font-medium text-gray-700">状态</label>
                 <div className="mt-1">
                   <span className={`inline-block px-3 py-1 text-sm rounded-full ${
