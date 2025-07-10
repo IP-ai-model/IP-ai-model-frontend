@@ -226,16 +226,21 @@ const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '', onPageC
               >
                 {/* NFT图片/占位符 */}
                 <div className="aspect-square bg-gradient-to-br from-pink-100 to-purple-100 rounded-lg mb-4 flex items-center justify-center">
-                    <img
-                      src="../../public/屏幕截图%202025-07-02%20171300.png"
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-
+                  <div key={`${nft.tokenId}-${nft.groupId}`} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                    {/* NFT图片/占位符 */}
+                    <div
+                        className="aspect-square bg-gradient-to-br from-pink-100 to-purple-100 rounded-lg mb-4 flex items-center justify-center">
+                          <img
+                              src={getImageName(nft.tokenId)}
+                              className="w-full h-full object-cover rounded-lg"
+                          />
+                    </div>
+                  </div>
                 </div>
 
                 {/* NFT信息 */}
                 <div className="space-y-2">
-                  <h4 className="font-medium text-gray-900">
+                <h4 className="font-medium text-gray-900">
                     {nft.metadata?.name || `NFT #${nft.tokenId}`}
                   </h4>
                   <p className="text-sm text-gray-600">
@@ -315,6 +320,18 @@ const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '', onPageC
       )}
     </div>
   );
+};
+const getImageName = (tokenId: string): string => {
+  switch (tokenId){
+    case '1':
+      return '../../public/。.jpg';
+    case '2':
+      return '../../public/k.jpg';
+    case '3':
+      return '屏幕截图 2025-07-02 171300.png';
+    default:
+      return '屏幕截图 2025-07-02 163516.png';
+  }
 };
 
 export default IPModelDisplay;
