@@ -5,6 +5,7 @@ import IPModelDisplay from '../components/IPModelDisplay';
 import PurchaseNFTModal from '../components/PurchaseNFTModal';
 import { Sparkles, Heart, Shield, Headphones, RefreshCw } from 'lucide-react';
 import { useIPModel } from '../contexts/IPModelContext';
+import { IPModelGroup } from '../types/dreamlicense';
 import { useWallet } from '../hooks/useWallet';
 
 interface HomePageProps {
@@ -15,7 +16,7 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
   const { groups, loading: ipModelLoading, error: ipModelError, refetch } = useIPModel();
   const { wallet } = useWallet();
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [selectedGroup, setSelectedGroup] = useState<IPModelGroup | null>(null);
 
   // 调试信息
   console.log('HomePage - groups:', groups);
@@ -306,7 +307,7 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
               </button>
             </div>
           ) : (
-            <IPModelDisplay />
+            <IPModelDisplay onPageChange={onPageChange} />
           )}
         </div>
       </div>

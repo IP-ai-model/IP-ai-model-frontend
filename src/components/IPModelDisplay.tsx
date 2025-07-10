@@ -6,9 +6,10 @@ import { useWallet } from '../hooks/useWallet';
 
 interface IPModelDisplayProps {
   className?: string;
+  onPageChange?: (page: string) => void;
 }
 
-const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '' }) => {
+const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '', onPageChange }) => {
   const { nfts, groups, groupedNFTs, loading, error, refetch } = useIPModel();
   const { wallet } = useWallet();
   const [selectedTab, setSelectedTab] = useState<'all' | 'active' | 'inactive' | 'free' | 'paid'>('all');
@@ -203,7 +204,11 @@ const IPModelDisplay: React.FC<IPModelDisplayProps> = ({ className = '' }) => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {getDisplayNFTs().map(nft => (
-              <div key={`${nft.tokenId}-${nft.groupId}`} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div
+                key={`${nft.tokenId}-${nft.groupId}`} 
+                className="border rounded-lg p-4 hover:shadow-md transition-shadow transform hover:scale-105 cursor-pointer"
+                onClick={() => onPageChange?.('ai-companion')}
+              >
                 {/* NFT图片/占位符 */}
                 <div className="aspect-square bg-gradient-to-br from-pink-100 to-purple-100 rounded-lg mb-4 flex items-center justify-center">
                   {nft.metadata?.image ? (
