@@ -74,15 +74,35 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
   const [contractOwner, setContractOwner] = useState<string>('');
   const [useMarketplace, setUseMarketplace] = useState<boolean>(true); // 默认使用 Marketplace
   const [marketplaceAddress, setMarketplaceAddress] = useState<string>('');
+  const [tokenAllowance, setTokenAllowance] = useState<string>('0');
+  const [tokenBalance, setTokenBalance] = useState<string>('0');
+  const [needsApproval, setNeedsApproval] = useState<boolean>(false);
+  const [isApproving, setIsApproving] = useState<boolean>(false);
+  const [tokenDecimals, setTokenDecimals] = useState<number>(18);
 
   // 检查是否已达到购买上限
   const isSupplyExhausted = parseInt(latestSupply) >= parseInt(maxSupply);
   const availableQuantity = parseInt(maxSupply) - parseInt(latestSupply);
   const maxPurchaseQuantity = Math.min(availableQuantity, 10); // 限制单次最大购买数量
 
+  // 将价格转换为正确的token单位
+  const convertPriceToTokenUnits = (priceString: string, decimals: number = 18) => {
+    try {
+      // 如果price已经是wei单位，直接返回
+      if (priceString.length > 10) {
+        return BigInt(priceString);
+      }
+      // 如果price是以太币单位，需要转换
+      return ethers.parseUnits(priceString, decimals);
+    } catch (error) {
+      // 如果转换失败，尝试作为wei单位处理
+      return BigInt(priceString);
+    }
+  };
+
   // 检查是否可以购买
   const canPurchase = () => {
-    if (!userAddress || loading || isSupplyExhausted) return false;
+    if (!userAddress || loading || isApproving || isSupplyExhausted) return false;
     
     // 如果使用 Marketplace，不需要特殊权限
     if (useMarketplace && marketplaceAddress) {
@@ -98,7 +118,13 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
   const getButtonText = () => {
     if (isSupplyExhausted) return '已售罄';
     if (!userAddress) return '请连接钱包';
+    if (isApproving) return '授权中...';
     if (loading) return '购买中...';
+    
+    // 检查是否需要授权
+    if (needsApproval && price !== '0' && payToken !== '0x0000000000000000000000000000000000000000') {
+      return '授权Token';
+    }
     
     if (useMarketplace && marketplaceAddress) {
       return '立即购买';
@@ -137,15 +163,14 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
         const owner = await contract.owner();
         setContractOwner(owner);
 
-        console.log('User authorization status:', { authorized, owner, userAddress });
-
         // 尝试验证 Marketplace 地址
         try {
           // 检查是否为占位符地址
           if (isPlaceholderAddress(IP_MODEL_MARKETPLACE_ADDRESS)) {
-            console.warn('使用占位符 Marketplace 地址，将使用模拟模式');
             setMarketplaceAddress(IP_MODEL_MARKETPLACE_ADDRESS);
             setUseMarketplace(true);
+            // 检查token授权（即使是模拟模式也检查）
+            await checkTokenAllowance();
             return;
           }
           
@@ -156,35 +181,125 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
           if (ipModelAddr.toLowerCase() === IP_MODEL_CONTRACT_ADDRESS.toLowerCase()) {
             setMarketplaceAddress(IP_MODEL_MARKETPLACE_ADDRESS);
             setUseMarketplace(true);
-            console.log('✅ Marketplace 合约验证成功:', IP_MODEL_MARKETPLACE_ADDRESS);
+            // 检查token授权
+            await checkTokenAllowance();
           } else {
-            console.warn('❌ Marketplace 合约验证失败: IP Model 地址不匹配');
             setUseMarketplace(false);
           }
         } catch (err) {
-          console.warn('❌ Marketplace 合约不可访问:', err);
           setUseMarketplace(false);
         }
       } catch (err) {
-        console.error('Failed to fetch balance and supply:', err);
+        // 静默处理错误
+      }
+    };
+
+    // 检查token授权的函数
+    const checkTokenAllowance = async () => {
+      if (!provider || !userAddress || !payToken || payToken === '0x0000000000000000000000000000000000000000') {
+        // 如果是ETH支付或没有payToken，不需要检查授权
+        setNeedsApproval(false);
+        return;
+      }
+
+      try {
+        const tokenContract = new ethers.Contract(payToken, ERC20_ABI, provider);
+        
+        // 获取token的decimals
+        const decimals = await tokenContract.decimals();
+        setTokenDecimals(decimals);
+        
+        // 获取用户的token余额
+        const balance = await tokenContract.balanceOf(userAddress);
+        setTokenBalance(balance.toString());
+        
+        // 获取当前授权额度
+        const allowance = await tokenContract.allowance(userAddress, marketplaceAddress || IP_MODEL_MARKETPLACE_ADDRESS);
+        setTokenAllowance(allowance.toString());
+        
+        // 计算需要的总价格 - 使用正确的decimals
+        const unitPrice = convertPriceToTokenUnits(price, decimals);
+        const totalPrice = unitPrice * BigInt(quantity);
+        
+        // 检查是否需要授权
+        if (allowance < totalPrice) {
+          setNeedsApproval(true);
+        } else {
+          setNeedsApproval(false);
+        }
+      } catch (err) {
+        // 静默处理token授权检查错误
       }
     };
 
     if (isOpen) {
       fetchBalanceAndSupply();
     }
-  }, [isOpen, provider, userAddress, groupId]);
+  }, [isOpen, provider, userAddress, groupId, quantity, price, payToken, marketplaceAddress]);
 
   // 格式化价格
   const formatPrice = (priceWei: string, qty: number) => {
     if (priceWei === '0') return '免费';
     
     try {
-      const priceInEther = parseFloat(priceWei) / Math.pow(10, 18);
-      const totalPrice = priceInEther * qty;
-      return `${totalPrice.toFixed(4)} tokens`;
+      // 使用convertPriceToTokenUnits来确保正确的单位转换
+      const unitPrice = convertPriceToTokenUnits(priceWei, tokenDecimals);
+      const totalPrice = unitPrice * BigInt(qty);
+      const formattedPrice = ethers.formatUnits(totalPrice, tokenDecimals);
+      const priceFloat = parseFloat(formattedPrice);
+      
+      if (priceFloat < 0.0001) {
+        return '< 0.0001 tokens';
+      } else {
+        return `${priceFloat.toFixed(4)} tokens`;
+      }
     } catch (error) {
       return `${priceWei} tokens`;
+    }
+  };
+
+  // 处理token授权
+  const handleTokenApproval = async () => {
+    if (!provider || !userAddress || !payToken || payToken === '0x0000000000000000000000000000000000000000') {
+      setError('无效的支付token');
+      return;
+    }
+
+    setIsApproving(true);
+    setError(null);
+
+    try {
+      const signer = await provider.getSigner();
+      const tokenContract = new ethers.Contract(payToken, ERC20_ABI, signer);
+      const spenderAddress = marketplaceAddress || IP_MODEL_MARKETPLACE_ADDRESS;
+
+      // 使用最大值授权（常用做法，避免频繁授权）
+      const maxUint256 = ethers.MaxUint256;
+      
+      const tx = await tokenContract.approve(spenderAddress, maxUint256);
+      
+      // 等待交易确认
+      await tx.wait();
+
+      // 重新检查授权状态
+      const newAllowance = await tokenContract.allowance(userAddress, spenderAddress);
+      setTokenAllowance(newAllowance.toString());
+      
+      // 检查是否还需要授权 - 使用正确的价格计算
+      const unitPrice = convertPriceToTokenUnits(price, tokenDecimals);
+      const totalPrice = unitPrice * BigInt(quantity);
+      setNeedsApproval(newAllowance < totalPrice);
+
+    } catch (err: any) {
+      let errorMessage = 'Token授权失败';
+      if (err.code === 'ACTION_REJECTED') {
+        errorMessage = '用户取消了授权';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -205,6 +320,12 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
       return;
     }
 
+    // 如果需要授权，先处理授权
+    if (needsApproval && price !== '0' && payToken !== '0x0000000000000000000000000000000000000000') {
+      await handleTokenApproval();
+      return; // 授权完成后用户需要再次点击购买
+    }
+
     setLoading(true);
     setError(null);
 
@@ -213,17 +334,11 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
 
       if (useMarketplace && marketplaceAddress) {
         // 使用 Marketplace 购买
-        console.log('🛒 使用 Marketplace 购买，合约地址:', marketplaceAddress);
         
         // 如果是占位符地址，使用模拟购买
         if (isPlaceholderAddress(marketplaceAddress)) {
-          console.log('⚠️ 模拟 Marketplace 购买');
-          
           // 模拟购买延迟
           await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // 模拟购买成功
-          console.log('✅ 模拟购买成功');
           
         } else {
           // 真实的 Marketplace 购买
@@ -231,68 +346,45 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
 
           // 检查是否需要支付代币
           if (price !== '0') {
-            const totalPrice = BigInt(price) * BigInt(quantity);
-            console.log('💰 计算总价格:', ethers.formatEther(totalPrice.toString()), 'tokens');
+            const unitPrice = convertPriceToTokenUnits(price, tokenDecimals);
+            const totalPrice = unitPrice * BigInt(quantity);
             
             // 如果是 ETH 支付 (payToken 为零地址)
             if (payToken === '0x0000000000000000000000000000000000000000') {
-              console.log('💳 ETH 支付模式');
-              // 由于 buyTokens 是 nonpayable，这里可能需要其他支付方式
-              // 检查合约是否有其他支付方法
               try {
-                const tx = await marketplaceContract.buyTokens(groupId, quantity);
-                console.log('📋 ETH 购买交易已发送:', tx.hash);
+                const tx = await marketplaceContract.buyTokens(groupId, quantity, { value: totalPrice });
                 await tx.wait();
-                console.log('✅ ETH 购买交易确认');
               } catch (err) {
-                console.error('❌ ETH 支付失败:', err);
-                setError('ETH 支付失败，请检查合约实现或联系管理员');
+                setError('ETH 支付失败，请检查余额或联系管理员');
                 setLoading(false);
                 return;
               }
             } else {
-              // 代币支付需要先批准
-              console.log('🪙 代币支付模式, 代币地址:', payToken);
-              try {
-                const tokenContract = new ethers.Contract(payToken, ERC20_ABI, signer);
+              // 代币支付 - 此时应该已经有足够的授权
+                const tokenContract = new ethers.Contract(payToken, ERC20_ABI, provider);
                 const allowance = await tokenContract.allowance(userAddress, marketplaceAddress);
+                console.log("allowance:", allowance.toString(), "totalPrice:", totalPrice.toString());
                 
+
                 if (allowance < totalPrice) {
-                  // 需要批准
-                  console.log('🔓 需要批准代币支付，数量:', ethers.formatEther(totalPrice.toString()));
-                  setError('正在批准代币支付，请在钱包中确认...');
-                  
-                  const approveTx = await tokenContract.approve(marketplaceAddress, totalPrice);
-                  console.log('📋 批准交易已发送:', approveTx.hash);
-                  await approveTx.wait();
-                  console.log('✅ 代币批准成功');
-                  
-                  setError(null);
+                  setError('Token授权不足，请先授权');
+                  setLoading(false);
+                  return;
                 }
+
+                console.log("groupId:", groupId, "quantity:", quantity);
+                
                 
                 // 执行购买
-                console.log('🛍️ 执行代币购买');
                 const tx = await marketplaceContract.buyTokens(groupId, quantity);
-                console.log('📋 代币购买交易已发送:', tx.hash);
                 await tx.wait();
-                console.log('✅ 代币购买交易确认');
-              } catch (err) {
-                console.error('❌ 代币支付失败:', err);
-                setError('代币支付失败，请检查余额和授权');
-                setLoading(false);
-                return;
-              }
             }
           } else {
             // 免费 NFT
-            console.log('🆓 免费 NFT 购买');
             try {
               const tx = await marketplaceContract.buyTokens(groupId, quantity);
-              console.log('📋 免费购买交易已发送:', tx.hash);
               await tx.wait();
-              console.log('✅ 免费购买交易确认');
             } catch (err) {
-              console.error('❌ 免费购买失败:', err);
               setError('免费购买失败，请稍后重试');
               setLoading(false);
               return;
@@ -301,7 +393,6 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
         }
       } else {
         // 使用直接 mint（需要授权）
-        console.log('使用直接 mint');
         
         // 检查用户是否有权限进行铸造
         const isOwner = userAddress.toLowerCase() === contractOwner.toLowerCase();
@@ -321,14 +412,11 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
         }
 
         // 执行mint
-        console.log('Attempting to mint:', { userAddress, groupId, quantity });
         const tx = await contract.mint(userAddress, groupId, quantity);
-        console.log('Mint transaction sent:', tx.hash);
         await tx.wait();
       }
       
       setSuccess(true);
-      console.log('Purchase successful!');
 
       // 更新供应量
       const newSupply = parseInt(latestSupply) + quantity;
@@ -341,8 +429,6 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
       }, 2000);
 
     } catch (err: any) {
-      console.error('Purchase failed:', err);
-      
       // 解析具体的错误信息
       let errorMessage = '购买失败';
       if (err.code === 'ACTION_REJECTED') {
@@ -412,6 +498,33 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
               <span className="text-gray-600">您已拥有:</span>
               <span className="font-medium">{userBalance}</span>
             </div>
+            
+            {/* Token余额和授权状态 */}
+            {payToken && payToken !== '0x0000000000000000000000000000000000000000' && (
+              <>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-600">Token余额:</span>
+                  <span className="font-medium">
+                    {tokenBalance === '0' ? '0' : `${parseFloat(ethers.formatUnits(tokenBalance, tokenDecimals)).toFixed(4)} tokens`}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-600">授权状态:</span>
+                  <span className={`font-medium ${needsApproval ? 'text-red-600' : 'text-green-600'}`}>
+                    {needsApproval ? '❌ 需要授权' : '✅ 已授权'}
+                  </span>
+                </div>
+                {!needsApproval && tokenAllowance !== '0' && (
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-gray-600">授权额度:</span>
+                    <span className="font-medium text-green-600">
+                      {tokenAllowance === ethers.MaxUint256.toString() ? '无限' : `${parseFloat(ethers.formatUnits(tokenAllowance, tokenDecimals)).toFixed(4)} tokens`}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+            
             <div className="flex justify-between text-sm mt-1">
               <span className="text-gray-600">铸造权限:</span>
               <span className={`font-medium ${isAuthorized || userAddress?.toLowerCase() === contractOwner.toLowerCase() ? 'text-green-600' : 'text-red-600'}`}>
@@ -538,18 +651,29 @@ const PurchaseNFTModal: React.FC<PurchaseNFTModalProps> = ({
             className={`flex-1 px-4 py-2 rounded-lg text-white font-medium flex items-center justify-center space-x-2 ${
               !canPurchase()
                 ? 'bg-gray-400 cursor-not-allowed'
+                : needsApproval && price !== '0' && payToken !== '0x0000000000000000000000000000000000000000'
+                ? 'bg-blue-600 hover:bg-blue-700'
                 : 'bg-pink-600 hover:bg-pink-700'
             }`}
           >
-            {loading ? (
+            {loading || isApproving ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>购买中...</span>
+                <span>{isApproving ? '授权中...' : '购买中...'}</span>
               </>
             ) : (
               <>
-                <ShoppingCart className="w-4 h-4" />
-                <span>{getButtonText()}</span>
+                {needsApproval && price !== '0' && payToken !== '0x0000000000000000000000000000000000000000' ? (
+                  <>
+                    <span>🔓</span>
+                    <span>授权Token</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-4 h-4" />
+                    <span>{getButtonText()}</span>
+                  </>
+                )}
               </>
             )}
           </button>

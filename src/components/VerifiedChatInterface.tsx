@@ -38,18 +38,8 @@ const VerifiedChatInterface: React.FC<VerifiedChatInterfaceProps> = ({
 
   const sendVerifiedMessage = async (content: string) => {
     // In production, this would send the verification data with each request
-    const requestData = {
-      message: content,
-      verification: {
-        walletAddress: verificationData.walletAddress,
-        nftId: verificationData.nftId,
-        zkProof: verificationData.zkProof,
-        timestamp: Date.now(),
-      }
-    };
-
+    
     // Mock API call with verification
-    console.log('Sending verified message:', requestData);
     
     // Simulate API response
     return new Promise<string>((resolve) => {
@@ -95,7 +85,7 @@ const VerifiedChatInterface: React.FC<VerifiedChatInterfaceProps> = ({
 
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Failed to send verified message:', error);
+      // Handle error silently
     } finally {
       setIsTyping(false);
     }

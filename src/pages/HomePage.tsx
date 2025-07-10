@@ -18,13 +18,6 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<IPModelGroup | null>(null);
 
-  // 调试信息
-  console.log('HomePage - groups:', groups);
-  console.log('HomePage - loading:', ipModelLoading);
-  console.log('HomePage - error:', ipModelError);
-  console.log('HomePage - wallet.provider:', !!wallet.provider);
-  console.log('HomePage - wallet.address:', wallet.address);
-
   // 处理图片点击，打开购买弹窗
   const handleImageClick = (groupId: string) => {
     const group = groups.find(g => g.groupId.toString() === groupId);
@@ -57,14 +50,12 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
 
   // 手动刷新数据
   const handleRefresh = async () => {
-    console.log('Manually refreshing data...');
     await refetch();
   };
 
   // 自动重试加载数据（当出错时）
   useEffect(() => {
     if (ipModelError && !ipModelLoading) {
-      console.log('Auto-retry loading data due to error:', ipModelError);
       const timer = setTimeout(() => {
         refetch();
       }, 3000); // 3秒后重试
@@ -88,7 +79,6 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
         return `${priceInEther.toFixed(4)} tokens`;
       }
     } catch (error) {
-      console.error('Price formatting error:', error);
       return `${price} tokens`;
     }
   };
